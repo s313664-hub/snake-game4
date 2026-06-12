@@ -1,0 +1,395 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Gem Snake Legend</title>
+
+<style>
+body{
+    margin:0;
+    font-family:"Segoe UI",sans-serif;
+    background:linear-gradient(180deg,#070d18,#02040a);
+    color:white;
+    text-align:center;
+}
+
+/* ===== 開始畫面 ===== */
+#startScreen{
+    position:fixed;
+    width:100%;
+    height:100%;
+    background:rgba(0,0,0,0.9);
+    display:flex;
+    flex-direction:column;
+    justify-content:center;
+    align-items:center;
+    z-index:10;
+}
+
+#startScreen h1{
+    font-size:40px;
+    color:#7dffbc;
+    margin-bottom:10px;
+}
+
+#startScreen p{
+    opacity:0.8;
+    margin-bottom:20px;
+}
+
+#startBtn{
+    padding:15px 30px;
+    font-size:20px;
+    border:none;
+    border-radius:12px;
+    background:#22cc77;
+    color:white;
+    cursor:pointer;
+}
+
+#startBtn:hover{
+    background:#18a861;
+}
+
+/* ===== 遊戲UI ===== */
+#info{
+    display:flex;
+    justify-content:center;
+    gap:15px;
+    flex-wrap:wrap;
+    margin:15px;
+}
+
+.card{
+    background:#122033;
+    padding:10px 15px;
+    border-radius:12px;
+    min-width:120px;
+}
+
+canvas{
+    background:#0a0f18;
+    border:3px solid #55ffbb;
+    border-radius:15px;
+    box-shadow:0 0 25px #55ffbb55;
+}
+
+button{
+    margin-top:10px;
+    padding:10px 20px;
+    border:none;
+    border-radius:10px;
+    background:#22cc77;
+    color:white;
+    font-size:16px;
+    cursor:pointer;
+}
+
+#message{
+    height:30px;
+    margin-top:10px;
+    font-size:22px;
+    color:gold;
+    font-weight:bold;
+}
+
+#ranking{
+    width:320px;
+    margin:20px auto;
+    background:#122033;
+    padding:15px;
+    border-radius:15px;
+    text-align:left;
+}
+</style>
+</head>
+
+<body>
+
+<!-- ===== 開始畫面 ===== -->
+<div id="startScreen">
+    <h1>🐍 Gem Snake Legend</h1>
+    <p>吃寶石、升級、挑戰最高分</p>
+    <button id="startBtn">開始遊戲</button>
+</div>
+
+<h1>🐍 Gem Snake Legend</h1>
+
+<div id="info">
+<div class="card">分數<br><span id="score">0</span></div>
+<div class="card">時間<br><span id="time">0</span>s</div>
+<div class="card">關卡<br><span id="level">1</span></div>
+<div class="card">Combo<br><span id="combo">0</span></div>
+</div>
+
+<canvas id="game" width="600" height="600"></canvas>
+
+<div id="message"></div>
+
+<div id="ranking">
+<h2>🏆 TOP 5</h2>
+<ol id="rankList"></ol>
+</div>
+
+<script>
+
+const canvas=document.getElementById("game");
+const ctx=canvas.getContext("2d");
+
+const GRID=20;
+const TILES=30;
+
+let snake=[];
+let food={};
+
+let direction={x:1,y:0};
+let queue=[];
+
+let score=0;
+let timer=0;
+let level=1;
+let combo=0;
+
+let gemsEaten=0;
+let comboTimer=0;
+
+let gameLoop;
+let timeLoop;
+
+/* ===== 開始遊戲 ===== */
+document.getElementById("startBtn").onclick=()=>{
+    document.getElementById("startScreen").style.display="none";
+    startGame();
+};
+
+function startGame(){
+
+    snake=[
+        {x:15,y:15},
+        {x:14,y:15},
+        {x:13,y:15}
+    ];
+
+    direction={x:1,y:0};
+    queue=[];
+
+    score=0;
+    timer=0;
+    level=1;
+    combo=0;
+    gemsEaten=0;
+
+    generateFood();
+    updateUI();
+
+    clearInterval(gameLoop);
+    clearInterval(timeLoop);
+
+    gameLoop=setInterval(updateGame,150);
+    timeLoop=setInterval(()=>{
+        timer++;
+        updateUI();
+    },1000);
+
+    document.getElementById("message").innerText="";
+}
+
+/* ===== 遊戲核心 ===== */
+function updateGame(){
+
+    if(queue.length){
+        direction=queue.shift();
+    }
+
+    const head={
+        x:snake[0].x+direction.x,
+        y:snake[0].y+direction.y
+    };
+
+    // 撞牆死亡
+    if(
+        head.x<0||head.x>=TILES||
+        head.y<0||head.y>=TILES
+    ){
+        gameOver();
+        return;
+    }
+
+    // 撞自己
+    for(let i=1;i<snake.length;i++){
+        if(snake[i].x===head.x&&snake[i].y===head.y){
+            gameOver();
+            return;
+        }
+    }
+
+    snake.unshift(head);
+
+    // 警示
+    if(
+        head.x<=1||head.x>=TILES-2||
+        head.y<=1||head.y>=TILES-2
+    ){
+        canvas.style.boxShadow="0 0 30px red";
+    }else{
+        canvas.style.boxShadow="0 0 25px #55ffbb55";
+    }
+
+    // 吃寶石
+    if(head.x===food.x&&head.y===food.y){
+
+        gemsEaten++;
+
+        if(Date.now()-comboTimer<3000){
+            combo++;
+        }else{
+            combo=1;
+        }
+
+        comboTimer=Date.now();
+
+        score+=10+combo*2;
+
+        generateFood();
+
+    }else{
+        snake.pop();
+    }
+
+    updateLevel();
+    updateUI();
+    draw();
+}
+
+/* ===== 關卡速度 ===== */
+function updateLevel(){
+
+    let old=level;
+
+    if(gemsEaten>=30) level=5;
+    else if(gemsEaten>=20) level=4;
+    else if(gemsEaten>=12) level=3;
+    else if(gemsEaten>=5) level=2;
+
+    if(old!==level){
+        document.getElementById("message").innerText="LEVEL "+level;
+
+        clearInterval(gameLoop);
+        gameLoop=setInterval(updateGame,150-level*10);
+
+        setTimeout(()=>{
+            document.getElementById("message").innerText="";
+        },1200);
+    }
+}
+
+/* ===== 食物 ===== */
+function generateFood(){
+
+    while(true){
+        let x=Math.floor(Math.random()*TILES);
+        let y=Math.floor(Math.random()*TILES);
+
+        let ok=!snake.some(s=>s.x===x&&s.y===y);
+
+        if(ok){
+            food={x,y};
+            return;
+        }
+    }
+}
+
+/* ===== 畫面 ===== */
+function draw(){
+
+    ctx.fillStyle="#0a0f18";
+    ctx.fillRect(0,0,600,600);
+
+    // 食物
+    ctx.shadowBlur=20;
+    ctx.fillStyle="#00ffff";
+
+    ctx.beginPath();
+    ctx.arc(food.x*GRID+10,food.y*GRID+10,8,0,Math.PI*2);
+    ctx.fill();
+
+    ctx.shadowBlur=0;
+
+    // 蛇
+    snake.forEach((p,i)=>{
+
+        ctx.fillStyle=i===0?"#99ffcc":"#22cc77";
+
+        ctx.beginPath();
+        ctx.roundRect(p.x*GRID+1,p.y*GRID+1,18,18,6);
+        ctx.fill();
+    });
+}
+
+/* ===== UI ===== */
+function updateUI(){
+    document.getElementById("score").innerText=score;
+    document.getElementById("time").innerText=timer;
+    document.getElementById("level").innerText=level;
+    document.getElementById("combo").innerText=combo;
+}
+
+/* ===== 死亡 ===== */
+function gameOver(){
+
+    clearInterval(gameLoop);
+    clearInterval(timeLoop);
+
+    let name=prompt("輸入名字");
+
+    let list=JSON.parse(localStorage.getItem("snakeTop5"))||[];
+
+    list.push({name:name||"玩家",score,time:timer});
+
+    list.sort((a,b)=>b.score-a.score);
+
+    list=list.slice(0,5);
+
+    localStorage.setItem("snakeTop5",JSON.stringify(list));
+
+    loadRank();
+
+    alert("遊戲結束\n分數："+score);
+}
+
+/* ===== 排行榜 ===== */
+function loadRank(){
+
+    let list=JSON.parse(localStorage.getItem("snakeTop5"))||[];
+
+    document.getElementById("rankList").innerHTML=
+    list.map(p=>`<li>${p.name} - ${p.score}分</li>`).join("");
+}
+
+/* ===== 控制 ===== */
+document.addEventListener("keydown",e=>{
+
+    let d=null;
+
+    if(e.key==="ArrowUp"||e.key==="w")d={x:0,y:-1};
+    if(e.key==="ArrowDown"||e.key==="s")d={x:0,y:1};
+    if(e.key==="ArrowLeft"||e.key==="a")d={x:-1,y:0};
+    if(e.key==="ArrowRight"||e.key==="d")d={x:1,y:0};
+
+    if(!d)return;
+
+    let last=queue.length?queue[queue.length-1]:direction;
+
+    if(last.x+d.x===0&&last.y+d.y===0)return;
+
+    queue.push(d);
+});
+
+loadRank();
+draw();
+
+</script>
+
+</body>
+</html>
